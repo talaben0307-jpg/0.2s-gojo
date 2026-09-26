@@ -1,4 +1,4 @@
--- Fluent UI - 0.2s Gojo Farm (Continuous Lock Target)
+-- Fluent UI - Gojo Target Lock Farm (Kill & Switch to Nearest)
 -- Created by @bphong0946
 
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
@@ -10,7 +10,7 @@ local LocalPlayer = Players.LocalPlayer
 -- Khởi tạo Window Fluent UI
 local Window = Fluent:CreateWindow({
     Title = "0.2s Gojo Farm | @bphong0946",
-    SubTitle = "⚡ Continuous Lock - Fluent Edition",
+    SubTitle = "⚡ Target Lock & Auto Switch - Fluent Edition",
     TabWidth = 160,
     Size = UDim2.fromOffset(580, 400),
     Acrylic = true,
@@ -29,39 +29,41 @@ local isFarmActive = false
 local tpOffset = 3 -- Độ cao đứng trên đầu mục tiêu
 local currentTarget = nil
 
--- Hàm tìm người chơi gần nhất trong JJS để bám chặt
-local function getClosestPlayer()
-    local closestTarget = nil
+-- Hàm tìm người chơi sống gần nhất còn tồn tại HumanoidRootPart
+local function getClosestTarget()
+    local closestPlayer = nil
     local shortestDistance = math.huge
-    
+    local char = LocalPlayer.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return nil end
+    local rootPos = char.HumanoidRootPart.Position
+
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character then
-            local root = player.Character:FindFirstChild("HumanoidRootPart")
-            local localRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-            
-            if root and localRoot then
-                local distance = (root.Position - localRoot.Position).Magnitude
+            local targetRoot = player.Character:FindFirstChild("HumanoidRootPart")
+            local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+            if targetRoot and humanoid and humanoid.Health > 0 then
+                local distance = (targetRoot.Position - rootPos).Magnitude
                 if distance < shortestDistance then
                     shortestDistance = distance
-                    closestTarget = player
+                    closestPlayer = player
                 end
             end
         end
     end
-    return closestTarget
+    return closestPlayer
 end
 
 -- ==========================================
 -- GIAO DIỆN TAB FARM
 -- ==========================================
 Tabs.Farm:AddParagraph({
-    Title = "Trạng thái Auto Farm (Bám dính liên tục)",
-    Content = "Đã bỏ cơ chế đổi người mỗi giây. Nhân vật sẽ khóa chặt và bám dính liên tục vào mục tiêu để tấn công mượt mà."
+    Title = "Trạng thái Auto Farm (Bám dính & Đổi mục tiêu khi chết)",
+    Content = "Tự động khóa và bám dính 1 người cho đến khi họ chết, sau đó tự động chuyển sang người gần nhất tiếp theo."
 })
 
 -- Toggle Bật/Tắt Farm
-Tabs.Farm:AddToggle("GojoRotateToggle", {
-    Title = "Bật/Tắt Continuous Farm",
+Tabs.Farm:AddToggle("GojoLockToggle", {
+    Title = "Bật/Tắt Target Lock Farm",
     Default = false,
     Callback = function(Value)
         isFarmActive = Value
@@ -93,7 +95,7 @@ Tabs.Farm:AddSlider("TPOffsetSlider", {
 })
 
 -- ==========================================
--- LOGIC BÁM DÍNH LIÊN TỤC MỖI FRAME
+-- LOGIC BÁM DÍNH VÀ TỰ ĐỘNG ĐỔI KHI MỤC TIÊU CHẾT
 -- ==========================================
 RunService.RenderStepped:Connect(function()
     if not isFarmActive then return end
@@ -103,11 +105,23 @@ RunService.RenderStepped:Connect(function()
         if not char or not char:FindFirstChild("HumanoidRootPart") then return end
         local rootPart = char.HumanoidRootPart
 
-        -- Kiểm tra mục tiêu hiện tại còn tồn tại không, nếu không thì tìm người gần nhất
-        if not currentTarget or not currentTarget.Character or not currentTarget.Character:FindFirstChild("HumanoidRootPart") then
-            currentTarget = getClosestPlayer()
+        -- Kiểm tra nếu mục tiêu hiện tại đã chết, mất character hoặc thoát game -> tìm mục tiêu gần nhất mới ngay lập tức
+        local needsNewTarget = false
+        if not currentTarget or not currentTarget.Character then
+            needsNewTarget = true
+        else
+            local humanoid = currentTarget.Character:FindFirstChildOfClass("Humanoid")
+            local targetRoot = currentTarget.Character:FindFirstChild("HumanoidRootPart")
+            if not humanoid or humanoid.Health <= 0 or not targetRoot then
+                needsNewTarget = true
+            end
         end
 
+        if needsNewTarget then
+            currentTarget = getClosestTarget()
+        end
+
+        -- Nếu có mục tiêu hợp lệ, bám dính chặt liên tục từng frame trên đầu họ
         if currentTarget and currentTarget.Character then
             local targetRoot = currentTarget.Character:FindFirstChild("HumanoidRootPart")
             if targetRoot then
@@ -118,11 +132,11 @@ RunService.RenderStepped:Connect(function()
                     end
                 end
 
-                -- Triệt tiêu quán tính vật lý tránh trượt vị trí
+                -- Triệt tiêu quán tính vật lý
                 rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
                 rootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
 
-                -- Khóa chặt vị trí liên tục trên đầu mục tiêu, giữ nguyên góc nhìn camera
+                -- Dịch chuyển bám sát đỉnh đầu mục tiêu
                 local targetCFrame = targetRoot.CFrame + Vector3.new(0, tpOffset, 0)
                 char:PivotTo(CFrame.new(targetCFrame.Position) * rootPart.CFrame.Rotation)
             end
@@ -133,6 +147,6 @@ end)
 Window:SelectTab(1)
 Fluent:Notify({
     Title = "0.2s Gojo Farm",
-    Content = "Đã chuyển sang chế độ bám dính liên tục thành công!",
+    Content = "Đã cập nhật chế độ Target Lock & Auto Switch chuẩn xác!",
     Duration = 4
 })
