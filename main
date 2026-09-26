@@ -1,4 +1,4 @@
--- Fluent UI - 0.2 Gojo Farm with Orbit Teleport
+-- Fluent UI - 0.2 Gojo Farm (Fixed Camera / No Screen Shake)
 -- Created by @bphong0946
 
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
@@ -10,28 +10,24 @@ local LocalPlayer = Players.LocalPlayer
 -- Khởi tạo Window Fluent UI
 local Window = Fluent:CreateWindow({
     Title = "0.2 Gojo Farm | @bphong0946",
-    SubTitle = "⚡ Orbit Farm - Fluent Edition",
+    SubTitle = "⚡ Stable TP (No Camera Shake) - Fluent Edition",
     TabWidth = 160,
-    Size = UDim2.fromOffset(580, 420),
+    Size = UDim2.fromOffset(580, 400),
     Acrylic = true,
     Theme = "Dark",
-    MinimizeKey = Enum.KeyCode.K -- Phím ẩn/hiện menu
+    MinimizeKey = Enum.KeyCode.K 
 })
 
 -- Tạo Tab chính
 local Tabs = {
-    Farm = Window:AddTab({ Title = "Gojo Orbit Farm", Icon = "swords" }),
+    Farm = Window:AddTab({ Title = "Gojo Direct Farm", Icon = "swords" }),
     Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
 }
 
-local Options = Fluent.Options
-
--- Biến điều khiển trạng thái và cấu hình Orbit
+-- Biến điều khiển trạng thái
 local isFarmActive = false
 local currentTarget = nil
-local orbitSpeed = 3
-local orbitRadius = 6
-local angle = 0
+local tpOffset = 3 -- Khoảng cách dịch chuyển trên đầu mục tiêu
 
 -- Hàm tìm kiếm người chơi tiếp theo còn sống
 local function getNextTarget()
@@ -50,52 +46,47 @@ end
 -- GIAO DIỆN TAB FARM
 -- ==========================================
 Tabs.Farm:AddParagraph({
-    Title = "Trạng thái Auto Farm",
-    Content = "Bật tính năng để nhân vật tự động bay lượn vòng tròn (Orbit) quanh mục tiêu còn sống và tự đổi người chơi khi mục tiêu chết."
+    Title = "Trạng thái Auto Farm (Đã chống văng màn hình)",
+    Content = "Bám chặt mục tiêu mà không làm ảnh hưởng đến góc nhìn camera của bạn."
 })
 
 -- Toggle Bật/Tắt Farm
-Tabs.Farm:AddToggle("GojoOrbitToggle", {
-    Title = "Bật/Tắt Gojo Orbit Farm",
+Tabs.Farm:AddToggle("GojoDirectToggle", {
+    Title = "Bật/Tắt Gojo Direct Farm",
     Default = false,
     Callback = function(Value)
         isFarmActive = Value
         if not isFarmActive then
             currentTarget = nil
+            pcall(function()
+                local char = LocalPlayer.Character
+                for _, part in ipairs(char:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = true
+                    end
+                end
+            end)
         end
     end
 })
 
--- Slider tùy chỉnh tốc độ xoay vòng (Orbit Speed)
-Tabs.Farm:AddSlider("OrbitSpeedSlider", {
-    Title = "Tốc độ xoay (Orbit Speed)",
-    Description = "Chỉnh tốc độ bay lượn vòng tròn",
+-- Slider tùy chỉnh độ cao TP so với đầu mục tiêu
+Tabs.Farm:AddSlider("TPOffsetSlider", {
+    Title = "Độ cao dịch chuyển (Offset Y)",
+    Description = "Chỉnh khoảng cách đứng trên đầu mục tiêu",
     Default = 3,
-    Min = 1,
+    Min = 0,
     Max = 10,
-    Rounding = 1,
-    Callback = function(Value)
-        orbitSpeed = Value
-    end
-})
-
--- Slider tùy chỉnh bán kính vòng xoay
-Tabs.Farm:AddSlider("OrbitRadiusSlider", {
-    Title = "Khoảng cách xoay (Radius)",
-    Description = "Chỉnh bán kính vòng xoay quanh mục tiêu",
-    Default = 6,
-    Min = 2,
-    Max = 15,
     Rounding = 0,
     Callback = function(Value)
-        orbitRadius = Value
+        tpOffset = Value
     end
 })
 
 -- ==========================================
--- LOGIC XỬ LÝ QUỸ ĐẠO ORBIT & AUTO TARGET
+-- LOGIC XỬ LÝ TELEPORT ỔN ĐỊNH (KHÔNG GIẬT CAMERA)
 -- ==========================================
-RunService.RenderStepped:Connect(function(dt)
+RunService.RenderStepped:Connect(function()
     if not isFarmActive then return end
     
     pcall(function()
@@ -118,22 +109,24 @@ RunService.RenderStepped:Connect(function(dt)
             currentTarget = getNextTarget()
         end
 
-        -- Nếu có mục tiêu hợp lệ, tính toán tọa độ xoay vòng quanh họ
+        -- Nếu có mục tiêu hợp lệ, dịch chuyển mượt mà bằng PivotTo
         if currentTarget and currentTarget.Character and currentTarget.Character:FindFirstChild("HumanoidRootPart") then
             local targetRoot = currentTarget.Character.HumanoidRootPart
             
-            -- Tăng góc quay theo thời gian thực và tốc độ cấu hình
-            angle = angle + (dt * orbitSpeed)
-            
-            -- Công thức lượng giác tính tọa độ vòng tròn quanh nhân vật mục tiêu
-            local offsetX = math.cos(angle) * orbitRadius
-            local offsetZ = math.sin(angle) * orbitRadius
-            
-            -- Đặt vị trí mới xoay quanh mục tiêu (bay cao hơn 2 đơn vị so với tâm người chơi)
-            local targetPos = targetRoot.Position + Vector3.new(offsetX, 2, offsetZ)
-            
-            -- Cập nhật CFrame để vừa xoay vòng vừa nhìn thẳng vào mục tiêu
-            rootPart.CFrame = CFrame.new(targetPos, targetRoot.Position)
+            -- Tắt va chạm phụ để không bị đẩy văng
+            for _, part in ipairs(char:GetDescendants()) do
+                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                    part.CanCollide = false
+                end
+            end
+
+            -- Triệt tiêu quán tính vật lý
+            rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+            rootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+
+            -- Dùng PivotTo để dời nhân vật theo vị trí đối thủ nhưng giữ nguyên góc xoay/hướng nhìn hiện tại của bạn
+            local targetCFrame = targetRoot.CFrame + Vector3.new(0, tpOffset, 0)
+            char:PivotTo(CFrame.new(targetCFrame.Position) * rootPart.CFrame.Rotation)
         end
     end)
 end)
@@ -142,6 +135,6 @@ end)
 Window:SelectTab(1)
 Fluent:Notify({
     Title = "0.2 Gojo Farm",
-    Content = "Đã tải thành công giao diện Fluent UI!",
+    Content = "Đã khóa lỗi văng màn hình thành công!",
     Duration = 4
 })
