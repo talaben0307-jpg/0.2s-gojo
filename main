@@ -1,4 +1,4 @@
--- Fluent UI - 0.2s Gojo Farm (JJS Direct Target Fix)
+-- Fluent UI - 0.2s Gojo Farm (Offset Front/Side Lock)
 -- Created by @bphong0946
 
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
@@ -10,7 +10,7 @@ local LocalPlayer = Players.LocalPlayer
 -- Khởi tạo Window Fluent UI
 local Window = Fluent:CreateWindow({
     Title = "0.2s Gojo Farm | @bphong0946",
-    SubTitle = "⚡ JJS Direct Target - Fluent Edition",
+    SubTitle = "⚡ Close Combat Lock - Fluent Edition",
     TabWidth = 160,
     Size = UDim2.fromOffset(580, 400),
     Acrylic = true,
@@ -26,40 +26,48 @@ local Tabs = {
 
 -- Biến điều khiển trạng thái
 local isFarmActive = false
-local tpOffset = 3 -- Độ cao đứng trên đầu mục tiêu
-local lastSwitchTime = 0
-local switchInterval = 1 -- Thời gian đổi người chơi (giây)
-local currentIndex = 1
+local tpDistance = 2 -- Khoảng cách cách mục tiêu (mặc định 2 stud)
+local tpHeight = 0   -- Độ cao so với mục tiêu (ngang tầm hoặc thấp hơn chút)
+local currentTarget = nil
 
--- Hàm quét lấy tất cả người chơi trong JJS (bỏ qua bản thân)
-local function getJJSPlayers()
-    local list = {}
+-- Hàm tìm người chơi gần nhất trong JJS để bám chặt
+local function getClosestPlayer()
+    local closestTarget = nil
+    local shortestDistance = math.huge
+    
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character then
-            -- Chỉ cần có Character và HumanoidRootPart là tóm luôn, không lọc máu rườm rà
-            if player.Character:FindFirstChild("HumanoidRootPart") then
-                table.insert(list, player)
+            local root = player.Character:FindFirstChild("HumanoidRootPart")
+            local localRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            
+            if root and localRoot then
+                local distance = (root.Position - localRoot.Position).Magnitude
+                if distance < shortestDistance then
+                    shortestDistance = distance
+                    closestTarget = player
+                end
             end
         end
     end
-    return list
+    return closestTarget
 end
 
 -- ==========================================
 -- GIAO DIỆN TAB FARM
 -- ==========================================
 Tabs.Farm:AddParagraph({
-    Title = "Trạng thái Auto Farm (JJS Mode)",
-    Content = "Đã tối ưu hóa riêng cho JJS. Tự động xoay vòng dịch chuyển sang người khác mỗi 1 giây để tích dame."
+    Title = "Trạng thái Auto Farm (Cận chiến 1-2 stud)",
+    Content = "Khóa chặt và đứng cách mục tiêu một khoảng cố định phía trước/ngang tầm để đánh trúng liên tục."
 })
 
--- Toggle Bật/Tắt Farm
+-- Toggle Bật/Tătă Farm
 Tabs.Farm:AddToggle("GojoRotateToggle", {
-    Title = "Bật/Tắt Teleport Farm",
+    Title = "Bật/Tắt Combat Lock",
     Default = false,
     Callback = function(Value)
         isFarmActive = Value
         if not isFarmActive then
+            currentTarget = nil
             pcall(function()
                 local char = LocalPlayer.Character
                 for _, part in ipairs(char:GetDescendants()) do
@@ -72,34 +80,34 @@ Tabs.Farm:AddToggle("GojoRotateToggle", {
     end
 })
 
--- Slider tùy chỉnh thời gian đổi người chơi
-Tabs.Farm:AddSlider("IntervalSlider", {
-    Title = "Thời gian đổi mục tiêu (Giây)",
-    Description = "Chỉnh số giây để dịch chuyển sang người tiếp theo",
-    Default = 1,
-    Min = 0.5,
+-- Slider tùy chỉnh khoảng cách cách mục tiêu (1-5 stud)
+Tabs.Farm:AddSlider("DistanceSlider", {
+    Title = "Khoảng cách cách mục tiêu (Studs)",
+    Description = "Chỉnh khoảng cách đứng gần mục tiêu (1 đến 5 stud)",
+    Default = 2,
+    Min = 1,
     Max = 5,
     Rounding = 1,
     Callback = function(Value)
-        switchInterval = Value
+        tpDistance = Value
     end
 })
 
--- Slider tùy chỉnh độ cao TP so với đầu mục tiêu
-Tabs.Farm:AddSlider("TPOffsetSlider", {
-    Title = "Độ cao dịch chuyển (Offset Y)",
-    Description = "Chỉnh khoảng cách đứng trên đầu mục tiêu",
-    Default = 3,
-    Min = 0,
-    Max = 10,
-    Rounding = 0,
+-- Slider tùy chỉnh độ cao (Offset Y)
+Tabs.Farm:AddSlider("HeightSlider", {
+    Title = "Độ cao so với mục tiêu (Offset Y)",
+    Description = "Chỉnh cao hoặc thấp hơn mục tiêu",
+    Default = 0,
+    Min = -2,
+    Max = 5,
+    Rounding = 1,
     Callback = function(Value)
-        tpOffset = Value
+        tpHeight = Value
     end
 })
 
 -- ==========================================
--- LOGIC XỬ LÝ DỊCH CHUYỂN TRỰC TIẾP TRONG JJS
+-- LOGIC BÁM DÍNH CẬN CHIẾN MỖI FRAME
 -- ==========================================
 RunService.RenderStepped:Connect(function()
     if not isFarmActive then return end
@@ -109,38 +117,31 @@ RunService.RenderStepped:Connect(function()
         if not char or not char:FindFirstChild("HumanoidRootPart") then return end
         local rootPart = char.HumanoidRootPart
 
-        local targets = getJJSPlayers()
-        if #targets > 0 then
-            -- Chuyển đổi mục tiêu theo thời gian cài đặt
-            if tick() - lastSwitchTime >= switchInterval then
-                lastSwitchTime = tick()
-                currentIndex = currentIndex + 1
-                if currentIndex > #targets then
-                    currentIndex = 1
-                end
-            end
+        -- Kiểm tra mục tiêu hiện tại, nếu mất thì tìm người gần nhất
+        if not currentTarget or not currentTarget.Character or not currentTarget.Character:FindFirstChild("HumanoidRootPart") then
+            currentTarget = getClosestPlayer()
+        end
 
-            if currentIndex > #targets then currentIndex = 1 end
-            local targetPlayer = targets[currentIndex]
-
-            if targetPlayer and targetPlayer.Character then
-                local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
-                if targetRoot then
-                    -- Tắt va chạm phụ để không bị game đẩy văng
-                    for _, part in ipairs(char:GetDescendants()) do
-                        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                            part.CanCollide = false
-                        end
+        if currentTarget and currentTarget.Character then
+            local targetRoot = currentTarget.Character:FindFirstChild("HumanoidRootPart")
+            if targetRoot then
+                -- Tắt va chạm phụ để không bị game đẩy văng
+                for _, part in ipairs(char:GetDescendants()) do
+                    if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                        part.CanCollide = false
                     end
-
-                    -- Triệt tiêu quán tính vật lý
-                    rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-                    rootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-
-                    -- Dịch chuyển trực tiếp bám lên đầu mục tiêu
-                    local targetCFrame = targetRoot.CFrame + Vector3.new(0, tpOffset, 0)
-                    char:PivotTo(CFrame.new(targetCFrame.Position) * rootPart.CFrame.Rotation)
                 end
+
+                -- Triệt tiêu quán tính vật lý
+                rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                rootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+
+                -- Tính toán vị trí: Đứng trước mặt mục tiêu một khoảng `tpDistance` và nhìn thẳng vào họ
+                local targetCFrame = targetRoot.CFrame
+                local offsetPosition = targetCFrame.Position + (targetCFrame.LookVector * tpDistance) + Vector3.new(0, tpHeight, 0)
+                
+                -- Khóa vị trí nhưng giữ góc nhìn hoặc hướng về phía mục tiêu
+                char:PivotTo(CFrame.new(offsetPosition, targetCFrame.Position + Vector3.new(0, tpHeight, 0)))
             end
         end
     end)
@@ -149,6 +150,6 @@ end)
 Window:SelectTab(1)
 Fluent:Notify({
     Title = "0.2s Gojo Farm",
-    Content = "Đã cập nhật chế độ tương thích trực tiếp với JJS!",
+    Content = "Đã cấu hình bám sát cận chiến 1-2 stud!",
     Duration = 4
 })
