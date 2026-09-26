@@ -1,4 +1,4 @@
--- Fluent UI - 0.2s Gojo Farm (Offset Front/Side Lock)
+-- Fluent UI - 0.2s Gojo Farm (Continuous Lock Target)
 -- Created by @bphong0946
 
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
@@ -10,7 +10,7 @@ local LocalPlayer = Players.LocalPlayer
 -- Khởi tạo Window Fluent UI
 local Window = Fluent:CreateWindow({
     Title = "0.2s Gojo Farm | @bphong0946",
-    SubTitle = "⚡ Close Combat Lock - Fluent Edition",
+    SubTitle = "⚡ Continuous Lock - Fluent Edition",
     TabWidth = 160,
     Size = UDim2.fromOffset(580, 400),
     Acrylic = true,
@@ -26,8 +26,7 @@ local Tabs = {
 
 -- Biến điều khiển trạng thái
 local isFarmActive = false
-local tpDistance = 2 -- Khoảng cách cách mục tiêu (mặc định 2 stud)
-local tpHeight = 0   -- Độ cao so với mục tiêu (ngang tầm hoặc thấp hơn chút)
+local tpOffset = 3 -- Độ cao đứng trên đầu mục tiêu
 local currentTarget = nil
 
 -- Hàm tìm người chơi gần nhất trong JJS để bám chặt
@@ -56,13 +55,13 @@ end
 -- GIAO DIỆN TAB FARM
 -- ==========================================
 Tabs.Farm:AddParagraph({
-    Title = "Trạng thái Auto Farm (Cận chiến 1-2 stud)",
-    Content = "Khóa chặt và đứng cách mục tiêu một khoảng cố định phía trước/ngang tầm để đánh trúng liên tục."
+    Title = "Trạng thái Auto Farm (Bám dính liên tục)",
+    Content = "Đã bỏ cơ chế đổi người mỗi giây. Nhân vật sẽ khóa chặt và bám dính liên tục vào mục tiêu để tấn công mượt mà."
 })
 
--- Toggle Bật/Tătă Farm
+-- Toggle Bật/Tắt Farm
 Tabs.Farm:AddToggle("GojoRotateToggle", {
-    Title = "Bật/Tắt Combat Lock",
+    Title = "Bật/Tắt Continuous Farm",
     Default = false,
     Callback = function(Value)
         isFarmActive = Value
@@ -80,34 +79,21 @@ Tabs.Farm:AddToggle("GojoRotateToggle", {
     end
 })
 
--- Slider tùy chỉnh khoảng cách cách mục tiêu (1-5 stud)
-Tabs.Farm:AddSlider("DistanceSlider", {
-    Title = "Khoảng cách cách mục tiêu (Studs)",
-    Description = "Chỉnh khoảng cách đứng gần mục tiêu (1 đến 5 stud)",
-    Default = 2,
-    Min = 1,
-    Max = 5,
-    Rounding = 1,
+-- Slider tùy chỉnh độ cao TP so với đầu mục tiêu
+Tabs.Farm:AddSlider("TPOffsetSlider", {
+    Title = "Độ cao dịch chuyển (Offset Y)",
+    Description = "Chỉnh khoảng cách đứng trên đầu mục tiêu",
+    Default = 3,
+    Min = 0,
+    Max = 10,
+    Rounding = 0,
     Callback = function(Value)
-        tpDistance = Value
-    end
-})
-
--- Slider tùy chỉnh độ cao (Offset Y)
-Tabs.Farm:AddSlider("HeightSlider", {
-    Title = "Độ cao so với mục tiêu (Offset Y)",
-    Description = "Chỉnh cao hoặc thấp hơn mục tiêu",
-    Default = 0,
-    Min = -2,
-    Max = 5,
-    Rounding = 1,
-    Callback = function(Value)
-        tpHeight = Value
+        tpOffset = Value
     end
 })
 
 -- ==========================================
--- LOGIC BÁM DÍNH CẬN CHIẾN MỖI FRAME
+-- LOGIC BÁM DÍNH LIÊN TỤC MỖI FRAME
 -- ==========================================
 RunService.RenderStepped:Connect(function()
     if not isFarmActive then return end
@@ -117,7 +103,7 @@ RunService.RenderStepped:Connect(function()
         if not char or not char:FindFirstChild("HumanoidRootPart") then return end
         local rootPart = char.HumanoidRootPart
 
-        -- Kiểm tra mục tiêu hiện tại, nếu mất thì tìm người gần nhất
+        -- Kiểm tra mục tiêu hiện tại còn tồn tại không, nếu không thì tìm người gần nhất
         if not currentTarget or not currentTarget.Character or not currentTarget.Character:FindFirstChild("HumanoidRootPart") then
             currentTarget = getClosestPlayer()
         end
@@ -132,16 +118,13 @@ RunService.RenderStepped:Connect(function()
                     end
                 end
 
-                -- Triệt tiêu quán tính vật lý
+                -- Triệt tiêu quán tính vật lý tránh trượt vị trí
                 rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
                 rootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
 
-                -- Tính toán vị trí: Đứng trước mặt mục tiêu một khoảng `tpDistance` và nhìn thẳng vào họ
-                local targetCFrame = targetRoot.CFrame
-                local offsetPosition = targetCFrame.Position + (targetCFrame.LookVector * tpDistance) + Vector3.new(0, tpHeight, 0)
-                
-                -- Khóa vị trí nhưng giữ góc nhìn hoặc hướng về phía mục tiêu
-                char:PivotTo(CFrame.new(offsetPosition, targetCFrame.Position + Vector3.new(0, tpHeight, 0)))
+                -- Khóa chặt vị trí liên tục trên đầu mục tiêu, giữ nguyên góc nhìn camera
+                local targetCFrame = targetRoot.CFrame + Vector3.new(0, tpOffset, 0)
+                char:PivotTo(CFrame.new(targetCFrame.Position) * rootPart.CFrame.Rotation)
             end
         end
     end)
@@ -150,6 +133,6 @@ end)
 Window:SelectTab(1)
 Fluent:Notify({
     Title = "0.2s Gojo Farm",
-    Content = "Đã cấu hình bám sát cận chiến 1-2 stud!",
+    Content = "Đã chuyển sang chế độ bám dính liên tục thành công!",
     Duration = 4
 })
