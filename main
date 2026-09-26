@@ -1,0 +1,127 @@
+-- Rayfield UI - 0.2 Gojo Farm with Orbit Teleport
+-- Created by @bphong0946
+
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+
+-- Khởi tạo cửa sổ Rayfield
+local Window = Rayfield:CreateWindow({
+   Name = "0.2 Gojo Farm | @bphong0946",
+   LoadingTitle = "Đang tải Gojo Orbit Farm...",
+   LoadingSubtitle = "by @bphong0946",
+   ConfigurationSaving = {
+      Enabled = true,
+      FolderName = "GojoFarmConfig",
+      FileName = "GojoOrbitConfig"
+   },
+   KeySystem = false,
+})
+
+-- Tạo Tab chính
+local MainTab = Window:CreateTab("Farm Hub", "swords")
+
+-- Biến điều khiển trạng thái và cấu hình Orbit
+local isFarmActive = false
+local currentTarget = nil
+local orbitSpeed = 3 -- Tốc độ xoay vòng
+local orbitRadius = 6 -- Khoảng cách bán kính vòng xoay quanh người chơi
+local angle = 0
+
+-- Hàm tìm kiếm người chơi tiếp theo còn sống
+local function getNextTarget()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid and humanoid.Health > 0 then
+                return player
+            end
+        end
+    end
+    return nil
+end
+
+-- Toggle Bật/Tắt Farm
+MainTab:CreateToggle({
+   Name = "Bật/Tắt Gojo Orbit Farm",
+   CurrentValue = false,
+   Flag = "GojoOrbitToggle",
+   Callback = function(Value)
+      isFarmActive = Value
+      if not isFarmActive then
+          currentTarget = nil
+      end
+   end,
+})
+
+-- Slider tùy chỉnh tốc độ xoay vòng (Orbit Speed)
+MainTab:CreateSlider({
+   Name = "Tốc độ xoay (Orbit Speed)",
+   Range = {1, 10},
+   Increment = 0.5,
+   CurrentValue = 3,
+   Flag = "OrbitSpeedSlider",
+   Callback = function(Value)
+      orbitSpeed = Value
+   end,
+})
+
+-- Slider tùy chỉnh bán kính vòng xoay
+MainTab:CreateSlider({
+   Name = "Khoảng cách xoay (Radius)",
+   Range = {2, 15},
+   Increment = 1,
+   CurrentValue = 6,
+   Flag = "OrbitRadiusSlider",
+   Callback = function(Value)
+      orbitRadius = Value
+   end,
+})
+
+-- Vòng lặp xử lý quỹ đạo xoay tròn liên tục bằng RenderStepped để mượt như lụa
+RunService.RenderStepped:Connect(function(dt)
+    if not isFarmActive then return end
+    
+    pcall(function()
+        local char = LocalPlayer.Character
+        if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+        local rootPart = char.HumanoidRootPart
+
+        -- Kiểm tra xem mục tiêu hiện tại có còn sống không
+        local isValidTarget = false
+        if currentTarget and currentTarget.Character then
+            local humanoid = currentTarget.Character:FindFirstChildOfClass("Humanoid")
+            local targetRoot = currentTarget.Character:FindFirstChild("HumanoidRootPart")
+            if humanoid and humanoid.Health > 0 and targetRoot then
+                isValidTarget = true
+            end
+        end
+
+        -- Nếu mục tiêu chết hoặc chưa có, tìm người mới
+        if not isValidTarget then
+            currentTarget = getNextTarget()
+        end
+
+        -- Nếu có mục tiêu hợp lệ, tính toán tọa độ xoay vòng quanh họ
+        if currentTarget and currentTarget.Character and currentTarget.Character:FindFirstChild("HumanoidRootPart") then
+            local targetRoot = currentTarget.Character.HumanoidRootPart
+            
+            -- Tăng góc quay theo thời gian thực và tốc độ cấu hình
+            angle = angle + (dt * orbitSpeed)
+            
+            -- Công thức lượng giác tính tọa độ vòng tròn quanh nhân vật mục tiêu
+            local offsetX = math.cos(angle) * orbitRadius
+            local offsetZ = math.sin(angle) * orbitRadius
+            
+            -- Đặt vị trí mới xoay quanh mục tiêu (giữ độ cao ngang họ hoặc bay lơ lửng nhẹ lên cao 2 đơn vị)
+            local targetPos = targetRoot.Position + Vector3.new(offsetX, 2, offsetZ)
+            
+            -- Cập nhật CFrame để vừa xoay vòng vừa nhìn thẳng vào mục tiêu
+            rootPart.CFrame = CFrame.new(targetPos, targetRoot.Position)
+        end
+    end)
+end)
+
+Rayfield:LoadConfiguration()
