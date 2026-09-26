@@ -1,33 +1,36 @@
--- Rayfield UI - 0.2 Gojo Farm with Orbit Teleport
+-- Fluent UI - 0.2 Gojo Farm with Orbit Teleport
 -- Created by @bphong0946
 
-local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
--- Khởi tạo cửa sổ Rayfield
-local Window = Rayfield:CreateWindow({
-   Name = "0.2 Gojo Farm | @bphong0946",
-   LoadingTitle = "Đang tải Gojo Orbit Farm...",
-   LoadingSubtitle = "by @bphong0946",
-   ConfigurationSaving = {
-      Enabled = true,
-      FolderName = "GojoFarmConfig",
-      FileName = "GojoOrbitConfig"
-   },
-   KeySystem = false,
+-- Khởi tạo Window Fluent UI
+local Window = Fluent:CreateWindow({
+    Title = "0.2 Gojo Farm | @bphong0946",
+    SubTitle = "⚡ Orbit Farm - Fluent Edition",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(580, 420),
+    Acrylic = true,
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.K -- Phím ẩn/hiện menu
 })
 
 -- Tạo Tab chính
-local MainTab = Window:CreateTab("Farm Hub", "swords")
+local Tabs = {
+    Farm = Window:AddTab({ Title = "Gojo Orbit Farm", Icon = "swords" }),
+    Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
+}
+
+local Options = Fluent.Options
 
 -- Biến điều khiển trạng thái và cấu hình Orbit
 local isFarmActive = false
 local currentTarget = nil
-local orbitSpeed = 3 -- Tốc độ xoay vòng
-local orbitRadius = 6 -- Khoảng cách bán kính vòng xoay quanh người chơi
+local orbitSpeed = 3
+local orbitRadius = 6
 local angle = 0
 
 -- Hàm tìm kiếm người chơi tiếp theo còn sống
@@ -43,44 +46,55 @@ local function getNextTarget()
     return nil
 end
 
+-- ==========================================
+-- GIAO DIỆN TAB FARM
+-- ==========================================
+Tabs.Farm:AddParagraph({
+    Title = "Trạng thái Auto Farm",
+    Content = "Bật tính năng để nhân vật tự động bay lượn vòng tròn (Orbit) quanh mục tiêu còn sống và tự đổi người chơi khi mục tiêu chết."
+})
+
 -- Toggle Bật/Tắt Farm
-MainTab:CreateToggle({
-   Name = "Bật/Tắt Gojo Orbit Farm",
-   CurrentValue = false,
-   Flag = "GojoOrbitToggle",
-   Callback = function(Value)
-      isFarmActive = Value
-      if not isFarmActive then
-          currentTarget = nil
-      end
-   end,
+Tabs.Farm:AddToggle("GojoOrbitToggle", {
+    Title = "Bật/Tắt Gojo Orbit Farm",
+    Default = false,
+    Callback = function(Value)
+        isFarmActive = Value
+        if not isFarmActive then
+            currentTarget = nil
+        end
+    end
 })
 
 -- Slider tùy chỉnh tốc độ xoay vòng (Orbit Speed)
-MainTab:CreateSlider({
-   Name = "Tốc độ xoay (Orbit Speed)",
-   Range = {1, 10},
-   Increment = 0.5,
-   CurrentValue = 3,
-   Flag = "OrbitSpeedSlider",
-   Callback = function(Value)
-      orbitSpeed = Value
-   end,
+Tabs.Farm:AddSlider("OrbitSpeedSlider", {
+    Title = "Tốc độ xoay (Orbit Speed)",
+    Description = "Chỉnh tốc độ bay lượn vòng tròn",
+    Default = 3,
+    Min = 1,
+    Max = 10,
+    Rounding = 1,
+    Callback = function(Value)
+        orbitSpeed = Value
+    end
 })
 
 -- Slider tùy chỉnh bán kính vòng xoay
-MainTab:CreateSlider({
-   Name = "Khoảng cách xoay (Radius)",
-   Range = {2, 15},
-   Increment = 1,
-   CurrentValue = 6,
-   Flag = "OrbitRadiusSlider",
-   Callback = function(Value)
-      orbitRadius = Value
-   end,
+Tabs.Farm:AddSlider("OrbitRadiusSlider", {
+    Title = "Khoảng cách xoay (Radius)",
+    Description = "Chỉnh bán kính vòng xoay quanh mục tiêu",
+    Default = 6,
+    Min = 2,
+    Max = 15,
+    Rounding = 0,
+    Callback = function(Value)
+        orbitRadius = Value
+    end
 })
 
--- Vòng lặp xử lý quỹ đạo xoay tròn liên tục bằng RenderStepped để mượt như lụa
+-- ==========================================
+-- LOGIC XỬ LÝ QUỸ ĐẠO ORBIT & AUTO TARGET
+-- ==========================================
 RunService.RenderStepped:Connect(function(dt)
     if not isFarmActive then return end
     
@@ -115,7 +129,7 @@ RunService.RenderStepped:Connect(function(dt)
             local offsetX = math.cos(angle) * orbitRadius
             local offsetZ = math.sin(angle) * orbitRadius
             
-            -- Đặt vị trí mới xoay quanh mục tiêu (giữ độ cao ngang họ hoặc bay lơ lửng nhẹ lên cao 2 đơn vị)
+            -- Đặt vị trí mới xoay quanh mục tiêu (bay cao hơn 2 đơn vị so với tâm người chơi)
             local targetPos = targetRoot.Position + Vector3.new(offsetX, 2, offsetZ)
             
             -- Cập nhật CFrame để vừa xoay vòng vừa nhìn thẳng vào mục tiêu
@@ -124,4 +138,10 @@ RunService.RenderStepped:Connect(function(dt)
     end)
 end)
 
-Rayfield:LoadConfiguration()
+-- Hoàn tất cài đặt giao diện
+Window:SelectTab(1)
+Fluent:Notify({
+    Title = "0.2 Gojo Farm",
+    Content = "Đã tải thành công giao diện Fluent UI!",
+    Duration = 4
+})
