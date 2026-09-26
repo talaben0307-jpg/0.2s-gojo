@@ -1,4 +1,4 @@
--- Fluent UI - 0.2 Gojo Farm (Fixed Camera / No Screen Shake)
+-- Fluent UI - 0.2s Gojo Farm (Fixed Teleport & Stable Hitbox)
 -- Created by @bphong0946
 
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
@@ -9,8 +9,8 @@ local LocalPlayer = Players.LocalPlayer
 
 -- Khởi tạo Window Fluent UI
 local Window = Fluent:CreateWindow({
-    Title = "0.2 Gojo Farm | @bphong0946",
-    SubTitle = "⚡ Stable TP (No Camera Shake) - Fluent Edition",
+    Title = "0.2s Gojo Farm | @bphong0946",
+    SubTitle = "⚡ 1s Teleport Rotate - Fluent Edition",
     TabWidth = 160,
     Size = UDim2.fromOffset(580, 400),
     Acrylic = true,
@@ -20,44 +20,50 @@ local Window = Fluent:CreateWindow({
 
 -- Tạo Tab chính
 local Tabs = {
-    Farm = Window:AddTab({ Title = "Gojo Direct Farm", Icon = "swords" }),
+    Farm = Window:AddTab({ Title = "Gojo Farm", Icon = "swords" }),
     Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
 }
 
 -- Biến điều khiển trạng thái
 local isFarmActive = false
-local currentTarget = nil
-local tpOffset = 3 -- Khoảng cách dịch chuyển trên đầu mục tiêu
+local tpOffset = 3 -- Độ cao đứng trên đầu mục tiêu
+local playerList = {}
+local currentIndex = 1
+local lastSwitchTime = 0
+local switchInterval = 1 -- Mặc định 1 giây đổi 1 người
 
--- Hàm tìm kiếm người chơi tiếp theo còn sống
-local function getNextTarget()
+-- Hàm lấy danh sách toàn bộ người chơi còn sống (trừ bản thân)
+local function getActivePlayers()
+    local list = {}
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
             local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
             if humanoid and humanoid.Health > 0 then
-                return player
+                table.insert(list, player)
             end
         end
     end
-    return nil
+    return list
 end
 
 -- ==========================================
 -- GIAO DIỆN TAB FARM
 -- ==========================================
 Tabs.Farm:AddParagraph({
-    Title = "Trạng thái Auto Farm (Đã chống văng màn hình)",
-    Content = "Bám chặt mục tiêu mà không làm ảnh hưởng đến góc nhìn camera của bạn."
+    Title = "Trạng thái Auto Farm (1 giây dịch chuyển 1 người)",
+    Content = "Mỗi giây script sẽ tự động dịch chuyển thẳng tới một người chơi khác để tích sát thương liên tục."
 })
 
 -- Toggle Bật/Tắt Farm
-Tabs.Farm:AddToggle("GojoDirectToggle", {
-    Title = "Bật/Tắt Gojo Direct Farm",
+Tabs.Farm:AddToggle("GojoRotateToggle", {
+    Title = "Bật/Tắt 1s Teleport Farm",
     Default = false,
     Callback = function(Value)
         isFarmActive = Value
         if not isFarmActive then
-            currentTarget = nil
+            playerList = {}
+            currentIndex = 1
+            -- Bật lại va chạm bình thường khi tắt script
             pcall(function()
                 local char = LocalPlayer.Character
                 for _, part in ipairs(char:GetDescendants()) do
@@ -67,6 +73,19 @@ Tabs.Farm:AddToggle("GojoDirectToggle", {
                 end
             end)
         end
+    end
+})
+
+-- Slider tùy chỉnh thời gian đổi người chơi (mặc định 1 giây)
+Tabs.Farm:AddSlider("IntervalSlider", {
+    Title = "Thời gian đổi mục tiêu (Giây)",
+    Description = "Chỉnh số giây để dịch chuyển sang người tiếp theo",
+    Default = 1,
+    Min = 0.5,
+    Max = 5,
+    Rounding = 1,
+    Callback = function(Value)
+        switchInterval = Value
     end
 })
 
@@ -84,7 +103,7 @@ Tabs.Farm:AddSlider("TPOffsetSlider", {
 })
 
 -- ==========================================
--- LOGIC XỬ LÝ TELEPORT ỔN ĐỊNH (KHÔNG GIẬT CAMERA)
+-- LOGIC XỬ LÝ DỊCH CHUYỂN MỖI 1 GIÂY (FIX LỖI HITBOX)
 -- ==========================================
 RunService.RenderStepped:Connect(function()
     if not isFarmActive then return end
@@ -94,39 +113,41 @@ RunService.RenderStepped:Connect(function()
         if not char or not char:FindFirstChild("HumanoidRootPart") then return end
         local rootPart = char.HumanoidRootPart
 
-        -- Kiểm tra xem mục tiêu hiện tại có còn sống không
-        local isValidTarget = false
-        if currentTarget and currentTarget.Character then
-            local humanoid = currentTarget.Character:FindFirstChildOfClass("Humanoid")
-            local targetRoot = currentTarget.Character:FindFirstChild("HumanoidRootPart")
-            if humanoid and humanoid.Health > 0 and targetRoot then
-                isValidTarget = true
-            end
-        end
-
-        -- Nếu mục tiêu chết hoặc chưa có, tìm người mới
-        if not isValidTarget then
-            currentTarget = getNextTarget()
-        end
-
-        -- Nếu có mục tiêu hợp lệ, dịch chuyển mượt mà bằng PivotTo
-        if currentTarget and currentTarget.Character and currentTarget.Character:FindFirstChild("HumanoidRootPart") then
-            local targetRoot = currentTarget.Character.HumanoidRootPart
-            
-            -- Tắt va chạm phụ để không bị đẩy văng
-            for _, part in ipairs(char:GetDescendants()) do
-                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                    part.CanCollide = false
+        -- Kiểm tra xem đã đến thời điểm đổi người chơi chưa (mỗi 1 giây)
+        if tick() - lastSwitchTime >= switchInterval then
+            lastSwitchTime = tick()
+            playerList = getActivePlayers()
+            if #playerList > 0 then
+                currentIndex = currentIndex + 1
+                if currentIndex > #playerList then
+                    currentIndex = 1
                 end
+                
+                -- Lấy mục tiêu mới theo danh sách
+                local targetPlayer = playerList[currentIndex]
+                if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                    local targetRoot = targetPlayer.Character.HumanoidRootPart
+                    
+                    -- Tắt va chạm phụ để không bị game đẩy văng ra ngoài
+                    for _, part in ipairs(char:GetDescendants()) do
+                        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                            part.CanCollide = false
+                        end
+                    end
+
+                    -- Triệt tiêu lực quán tính vật lý
+                    rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                    rootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+
+                    -- Dịch chuyển trực tiếp đến đầu mục tiêu ngay khi đến mốc thời gian
+                    local targetCFrame = targetRoot.CFrame + Vector3.new(0, tpOffset, 0)
+                    char:PivotTo(CFrame.new(targetCFrame.Position) * rootPart.CFrame.Rotation)
+                end
+            else
+                -- Nếu không còn ai sống, quét lại danh sách
+                playerList = getActivePlayers()
+                currentIndex = 1
             end
-
-            -- Triệt tiêu quán tính vật lý
-            rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-            rootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-
-            -- Dùng PivotTo để dời nhân vật theo vị trí đối thủ nhưng giữ nguyên góc xoay/hướng nhìn hiện tại của bạn
-            local targetCFrame = targetRoot.CFrame + Vector3.new(0, tpOffset, 0)
-            char:PivotTo(CFrame.new(targetCFrame.Position) * rootPart.CFrame.Rotation)
         end
     end)
 end)
@@ -134,7 +155,7 @@ end)
 -- Hoàn tất cài đặt giao diện
 Window:SelectTab(1)
 Fluent:Notify({
-    Title = "0.2 Gojo Farm",
-    Content = "Đã khóa lỗi văng màn hình thành công!",
+    Title = "0.2s Gojo Farm",
+    Content = "Đã cập nhật chế độ 1s Teleport dính chặt Hitbox!",
     Duration = 4
 })
